@@ -427,6 +427,127 @@ double TotalLots(bool buySide)
    return lots;
 }
 
+void RebuildStateFromExistingPositions()
+{
+   // Rebuild BUY side
+   double avgB=0.0; int nBuy=CountBuy(avgB);
+   g_hasOpenBuy = (nBuy>0);
+   g_seriesEntriesBuy = nBuy;
+   if(nBuy>0)
+   {
+      datetime earliestTime = 0; double earliestPrice = 0.0; bool has=false;
+      for(int i=0;i<PositionsTotal();++i)
+      {
+         if(!pos.SelectByIndex(i)) continue;
+         if(pos.Symbol()!=_Symbol) continue;
+         if((long)pos.Magic()!=(long)MagicNumber) continue;
+         if(pos.PositionType()!=POSITION_TYPE_BUY) continue;
+         datetime t=(datetime)pos.Time(); double o=pos.PriceOpen();
+         if(!has || t<earliestTime){ earliestTime=t; earliestPrice=o; has=true; }
+      }
+      if(has) g_anchorPriceBuy = earliestPrice;
+      MarkZoneBuy(0);
+      // Mark zones for all existing BUY positions relative to anchor
+      for(int i=0;i<PositionsTotal();++i)
+      {
+         if(!pos.SelectByIndex(i)) continue;
+         if(pos.Symbol()!=_Symbol) continue;
+         if((long)pos.Magic()!=(long)MagicNumber) continue;
+         if(pos.PositionType()!=POSITION_TYPE_BUY) continue;
+         int zi = ZoneIndexFromAsk(pos.PriceOpen());
+         MarkZoneBuy(zi);
+      }
+      if(nBuy==1)
+      {
+         double open=0.0; if(GetSingleBuy(open))
+         {
+            double bid=(g_lastBid>0.0?g_lastBid:SymbolInfoDouble(_Symbol,SYMBOL_BID));
+            g_singlePeakPipsBuy = MathMax(0.0, PriceToPips(bid-open));
+            g_singleLockPriceBuy = 0.0;
+         }
+         g_zoneActiveBuy=false; g_zonePeakPipsBuy=0.0; g_zoneLockPosBuy=0.0; g_zoneLockNegBuy=0.0;
+      }
+      else // nBuy >= 2
+      {
+         g_zoneActiveBuy=true;
+         double ref=ZoneRefPriceBuy();
+         if(ref>0.0)
+         {
+            double bid=(g_lastBid>0.0?g_lastBid:SymbolInfoDouble(_Symbol,SYMBOL_BID));
+            g_zonePeakPipsBuy = MathMax(0.0, PriceToPips(bid-ref));
+         }
+         g_zoneLockPosBuy=0.0; g_zoneLockNegBuy=0.0;
+         g_singlePeakPipsBuy=0.0; g_singleLockPriceBuy=0.0;
+      }
+      g_firstTradeM1Buy = 0; // avoid same-bar gating after restart
+      g_lastAddTimeBuy = (datetime)(TimeCurrent() - MinSecondsBetweenAdds);
+   }
+   else
+   {
+      g_anchorPriceBuy=0.0; g_firstTradeM1Buy=0; g_singlePeakPipsBuy=0.0; g_singleLockPriceBuy=0.0;
+      g_zoneActiveBuy=false; g_zonePeakPipsBuy=0.0; g_zoneLockPosBuy=0.0; g_zoneLockNegBuy=0.0;
+   }
+
+   // Rebuild SELL side
+   double avgS=0.0; int nSell=CountSell(avgS);
+   g_hasOpenSell = (nSell>0);
+   g_seriesEntriesSell = nSell;
+   if(nSell>0)
+   {
+      datetime earliestTime = 0; double earliestPrice = 0.0; bool has=false;
+      for(int i=0;i<PositionsTotal();++i)
+      {
+         if(!pos.SelectByIndex(i)) continue;
+         if(pos.Symbol()!=_Symbol) continue;
+         if((long)pos.Magic()!=(long)MagicNumber) continue;
+         if(pos.PositionType()!=POSITION_TYPE_SELL) continue;
+         datetime t=(datetime)pos.Time(); double o=pos.PriceOpen();
+         if(!has || t<earliestTime){ earliestTime=t; earliestPrice=o; has=true; }
+      }
+      if(has) g_anchorPriceSell = earliestPrice;
+      MarkZoneSell(0);
+      // Mark zones for all existing SELL positions relative to anchor
+      for(int i=0;i<PositionsTotal();++i)
+      {
+         if(!pos.SelectByIndex(i)) continue;
+         if(pos.Symbol()!=_Symbol) continue;
+         if((long)pos.Magic()!=(long)MagicNumber) continue;
+         if(pos.PositionType()!=POSITION_TYPE_SELL) continue;
+         int zi = ZoneIndexFromBid(pos.PriceOpen());
+         MarkZoneSell(zi);
+      }
+      if(nSell==1)
+      {
+         double open=0.0; if(GetSingleSell(open))
+         {
+            double ask=(g_lastAsk>0.0?g_lastAsk:SymbolInfoDouble(_Symbol,SYMBOL_ASK));
+            g_singlePeakPipsSell = MathMax(0.0, PriceToPips(open-ask));
+            g_singleLockPriceSell = 0.0;
+         }
+         g_zoneActiveSell=false; g_zonePeakPipsSell=0.0; g_zoneLockPosSell=0.0; g_zoneLockNegSell=0.0;
+      }
+      else // nSell >= 2
+      {
+         g_zoneActiveSell=true;
+         double ref=ZoneRefPriceSell();
+         if(ref>0.0)
+         {
+            double ask=(g_lastAsk>0.0?g_lastAsk:SymbolInfoDouble(_Symbol,SYMBOL_ASK));
+            g_zonePeakPipsSell = MathMax(0.0, PriceToPips(ref-ask));
+         }
+         g_zoneLockPosSell=0.0; g_zoneLockNegSell=0.0;
+         g_singlePeakPipsSell=0.0; g_singleLockPriceSell=0.0;
+      }
+      g_firstTradeM1Sell = 0;
+      g_lastAddTimeSell = (datetime)(TimeCurrent() - MinSecondsBetweenAdds);
+   }
+   else
+   {
+      g_anchorPriceSell=0.0; g_firstTradeM1Sell=0; g_singlePeakPipsSell=0.0; g_singleLockPriceSell=0.0;
+      g_zoneActiveSell=false; g_zonePeakPipsSell=0.0; g_zoneLockPosSell=0.0; g_zoneLockNegSell=0.0;
+   }
+}
+
 // dohvat točno jednog
 bool GetSingleBuy(double& open)
 {
@@ -1069,6 +1190,7 @@ int OnInit()
    hHTF_Fast=hHTF_Slow=hEntryMA=hRSI=hATR=INVALID_HANDLE;
    g_cachedATR_Pips=0.0;
    g_cachedATR_Time=0;
+   RebuildStateFromExistingPositions(); // Call the new function here
    return(INIT_SUCCEEDED);
 }
 void OnDeinit(const int reason)
